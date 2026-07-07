@@ -1,0 +1,103 @@
+{
+  "name": "Odoo - Alerta Cierres de Caja Modificados",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [-640, 0],
+      "id": "node-0001",
+      "name": "Cada 2 minutos"
+    },
+    {
+      "parameters": {
+        "jsCode": "var now = new Date();\nvar cutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000); // PRUEBA: 90 días — cambiar a 2 * 60 * 1000 en producción\n\nfunction pad(n) { return String(n).padStart(2, '0'); }\nfunction toOdoo(d) {\n  return d.getUTCFullYear() + '-' + pad(d.getUTCMonth()+1) + '-' + pad(d.getUTCDate()) +\n    ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds());\n}\n\nreturn [{ json: {\n  cutoff: toOdoo(cutoff),\n  now_label: now.toLocaleString('es-VE', { timeZone: 'America/Caracas' })\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-432, 0],
+      "id": "node-0002",
+      "name": "Calcular Ventana de Tiempo"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://supricom2.odoo.com/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    jsonrpc: '2.0', method: 'call', id: null,\n    params: {\n      service: 'object', method: 'execute_kw',\n      args: [\n        'supricom-prod1-25424683', 388,\n        '47d01399e318452857e554e82184aaf4745b47a1',\n        'pos.session', 'search_read',\n        [[\n          ['state', '=', 'closed'],\n          ['write_date', '>=', $json.cutoff]\n        ]],\n        {\n          fields: ['name', 'stop_at', 'write_date', 'write_uid', 'cash_register_balance_end_real', 'cash_register_difference', 'config_id', 'company_id'],\n          limit: 100,\n          order: 'write_date desc',\n          context: { allowed_company_ids: [9, 10, 7] }\n        }\n      ]\n    }\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-224, 0],
+      "id": "node-0003",
+      "name": "Buscar Sesiones Cerradas Modificadas"
+    },
+    {
+      "parameters": {
+        "jsCode": "var resultado = $('Buscar Sesiones Cerradas Modificadas').first().json.result || [];\nvar params = $('Calcular Ventana de Tiempo').first().json;\n\n// Filtrar solo sesiones modificadas DESPUÉS de su cierre\nvar sospechosas = resultado.filter(function(s) {\n  if (!s.stop_at || !s.write_date) return false;\n  var fechaCierre = new Date(s.stop_at.replace(' ', 'T') + 'Z');\n  var fechaModif = new Date(s.write_date.replace(' ', 'T') + 'Z');\n  // Tolerancia de 60 segundos para cambios propios del proceso de cierre\n  return (fechaModif - fechaCierre) > 60000;\n});\n\nif (sospechosas.length === 0) return [];\n\nvar filas = '';\nsospechosas.forEach(function(s, i) {\n  var bg = i % 2 === 0 ? '#ffffff' : '#fff8e1';\n  var sesion = s.name || 'N/A';\n  var empresa = s.company_id ? s.company_id[1] : 'N/A';\n  var punto = s.config_id ? s.config_id[1] : 'N/A';\n  var responsable = s.write_uid ? s.write_uid[1] : 'Desconocido';\n\n  var fechaCierre = new Date(s.stop_at.replace(' ', 'T') + 'Z');\n  var fechaModif = new Date(s.write_date.replace(' ', 'T') + 'Z');\n  var diffMin = Math.round((fechaModif - fechaCierre) / 60000);\n  var diffLabel = diffMin >= 60\n    ? Math.round(diffMin / 60) + 'h ' + (diffMin % 60) + 'min despu\\u00e9s del cierre'\n    : diffMin + ' min despu\\u00e9s del cierre';\n\n  var saldo = typeof s.cash_register_balance_end_real === 'number'\n    ? s.cash_register_balance_end_real.toLocaleString('es-VE', { minimumFractionDigits: 2 })\n    : '—';\n  var diff = typeof s.cash_register_difference === 'number'\n    ? s.cash_register_difference\n    : null;\n  var diffStyle = diff !== null && diff < 0 ? 'color:#dc3545;font-weight:700;' : diff > 0 ? 'color:#28a745;font-weight:700;' : 'color:#555;';\n  var diffText = diff !== null\n    ? (diff >= 0 ? '+' : '') + diff.toLocaleString('es-VE', { minimumFractionDigits: 2 })\n    : '—';\n\n  var cierreStr = fechaCierre.toLocaleString('es-VE', { timeZone: 'America/Caracas' });\n  var modifStr = fechaModif.toLocaleString('es-VE', { timeZone: 'America/Caracas' });\n\n  filas += '<tr style=\"background:' + bg + '\">' +\n    '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;font-weight:600;\">' + sesion + '</td>' +\n    '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;\">' + empresa + '</td>' +\n    '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;\">' + punto + '</td>' +\n    '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;white-space:nowrap;\">' + cierreStr + '</td>' +\n    '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;white-space:nowrap;color:#dc3545;font-weight:700;\">' + modifStr + '</td>' +\n    '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:11px;color:#e67e00;\">' + diffLabel + '</td>' +\n    '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;text-align:right;\">' + saldo + '</td>' +\n    '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;text-align:right;' + diffStyle + '\">' + diffText + '</td>' +\n    '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;color:#555;\">' + responsable + '</td>' +\n    '</tr>';\n});\n\nvar tabla = '<table style=\"width:100%;border-collapse:collapse;font-size:13px;\">' +\n  '<thead><tr style=\"background:#e67e00;color:#fff;\">' +\n  '<th style=\"padding:9px 10px;text-align:left;\">Sesi\\u00f3n</th>' +\n  '<th style=\"padding:9px 10px;text-align:left;\">Empresa</th>' +\n  '<th style=\"padding:9px 10px;text-align:left;\">Punto de Venta</th>' +\n  '<th style=\"padding:9px 10px;text-align:left;\">Fecha Cierre</th>' +\n  '<th style=\"padding:9px 10px;text-align:left;\">Fecha Modificaci\\u00f3n</th>' +\n  '<th style=\"padding:9px 10px;text-align:left;\">Tiempo Despu\\u00e9s</th>' +\n  '<th style=\"padding:9px 10px;text-align:right;\">Saldo Final</th>' +\n  '<th style=\"padding:9px 10px;text-align:right;\">Diferencia</th>' +\n  '<th style=\"padding:9px 10px;text-align:left;\">Modificado por</th>' +\n  '</tr></thead>' +\n  '<tbody>' + filas + '</tbody></table>';\n\nreturn [{ json: {\n  tabla: tabla,\n  total: sospechosas.length,\n  now_label: params.now_label\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "node-0004",
+      "name": "Evaluar Sesiones Sospechosas"
+    },
+    {
+      "parameters": {
+        "sendTo": "dmedina@supricom.com.ve",
+        "subject": "=⚠️ ALERTA CAJA — {{ $json.total }} sesión(es) modificada(s) tras cierre · {{ $json.now_label }}",
+        "message": "=<div style=\"font-family:Arial,sans-serif;max-width:1000px;margin:0 auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;\">\n  <div style=\"background:#e67e00;padding:20px 28px;\">\n    <h2 style=\"color:#fff;margin:0;font-size:20px;\">&#x26A0;&#xFE0F; SUPRICOM &#x2014; Alerta de Caja Modificada</h2>\n    <p style=\"color:#fff3e0;margin:6px 0 0;font-size:13px;\">{{ $json.now_label }}</p>\n  </div>\n  <div style=\"background:#fff8e1;padding:12px 28px;border-bottom:1px solid #ffd700;\">\n    <span style=\"display:inline-block;background:#e67e00;color:#fff;border-radius:4px;padding:4px 12px;font-size:13px;font-weight:700;\">&#x26A0;&#xFE0F; {{ $json.total }} cierre(s) de caja modificado(s) despu&#233;s de cerrar</span>\n  </div>\n  <div style=\"padding:24px 28px;overflow-x:auto;\">\n    <p style=\"font-size:12px;color:#888;margin:0 0 14px;\">Las siguientes sesiones de caja fueron modificadas despu&#233;s de su cierre oficial. Esto puede indicar manipulaci&#243;n de registros.</p>\n    {{ $json.tabla }}\n  </div>\n  <div style=\"background:#f0f4f8;padding:14px 28px;text-align:center;\">\n    <p style=\"font-size:12px;color:#999;margin:0;\">Monitoreo autom&#225;tico de seguridad &middot; n8n &middot; SUPRICOM</p>\n  </div>\n</div>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [208, 0],
+      "id": "node-0005",
+      "name": "Enviar Alerta Gmail",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "km7PyKWLEZgHHMzw",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada 2 minutos": {
+      "main": [[{ "node": "Calcular Ventana de Tiempo", "type": "main", "index": 0 }]]
+    },
+    "Calcular Ventana de Tiempo": {
+      "main": [[{ "node": "Buscar Sesiones Cerradas Modificadas", "type": "main", "index": 0 }]]
+    },
+    "Buscar Sesiones Cerradas Modificadas": {
+      "main": [[{ "node": "Evaluar Sesiones Sospechosas", "type": "main", "index": 0 }]]
+    },
+    "Evaluar Sesiones Sospechosas": {
+      "main": [[{ "node": "Enviar Alerta Gmail", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "1683493ca79f362f0cdd6311bf11f1609621e8cd207e078485d8ca15ccb3975a"
+  },
+  "tags": ["pos", "caja", "odoo", "seguridad", "anti-fraude"]
+}
