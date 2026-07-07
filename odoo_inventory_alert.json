@@ -65,7 +65,7 @@
               "rightValue": 0,
               "operator": {
                 "type": "number",
-                "operation": "largerEqual"
+                "operation": "larger"
               }
             }
           ],
