@@ -1,5 +1,5 @@
 {
-  "name": "Odoo - Alerta de Ajustes de Inventario",
+  "name": "Odoo - Alerta Ajustes de Inventario",
   "nodes": [
     {
       "parameters": {
@@ -12,205 +12,138 @@
           ]
         }
       },
-      "id": "a1b2c3d4-0001-0001-0001-000000000001",
-      "name": "Cada 15 minutos",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [240, 300]
+      "position": [-480, 0],
+      "id": "node-0001",
+      "name": "Cada 15 minutos"
     },
     {
       "parameters": {
-        "operation": "getAll",
-        "resource": "record",
-        "options": {
-          "model": "stock.inventory",
-          "filters": [
-            ["state", "=", "done"],
-            ["date", ">=", "={{ $now.minus({minutes: 15}).toISO() }}"]
-          ],
-          "fields": [
-            "id",
-            "name",
-            "date",
-            "state",
-            "user_id",
-            "company_id",
-            "move_ids"
-          ]
-        }
+        "jsCode": "var now = new Date();\nvar cutoff = new Date(now.getTime() - 15 * 60 * 1000);\n\nfunction pad(n) { return String(n).padStart(2, '0'); }\n\nfunction toOdooDatetime(d) {\n  return d.getUTCFullYear() + '-' +\n    pad(d.getUTCMonth() + 1) + '-' +\n    pad(d.getUTCDate()) + ' ' +\n    pad(d.getUTCHours()) + ':' +\n    pad(d.getUTCMinutes()) + ':' +\n    pad(d.getUTCSeconds());\n}\n\nreturn [{ json: {\n  cutoff: toOdooDatetime(cutoff),\n  now_label: now.toLocaleString('es-VE', { timeZone: 'America/Caracas' })\n} }];"
       },
-      "id": "a1b2c3d4-0002-0002-0002-000000000002",
-      "name": "Obtener Ajustes de Inventario",
-      "type": "n8n-nodes-base.odoo",
-      "typeVersion": 1,
-      "position": [460, 300],
-      "credentials": {
-        "odooApi": {
-          "id": "odoo_cred",
-          "name": "Odoo API"
-        }
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-272, 0],
+      "id": "node-0002",
+      "name": "Calcular Ventana de Tiempo"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://supricom2.odoo.com/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    jsonrpc: '2.0', method: 'call', id: null,\n    params: {\n      service: 'object', method: 'execute_kw',\n      args: [\n        'supricom-prod1-25424683', 388,\n        '47d01399e318452857e554e82184aaf4745b47a1',\n        'stock.move', 'search_read',\n        [[\n          ['state', '=', 'done'],\n          ['date', '>=', $json.cutoff],\n          ['picking_type_id.code', '=', 'inventory']\n        ]],\n        {\n          fields: [\n            'name', 'reference', 'date',\n            'product_id', 'product_uom_qty', 'quantity_done',\n            'location_id', 'location_dest_id',\n            'company_id', 'origin'\n          ],\n          limit: 500,\n          context: { allowed_company_ids: [9, 10, 7] }\n        }\n      ]\n    }\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-64, 0],
+      "id": "node-0003",
+      "name": "Buscar Ajustes de Inventario"
     },
     {
       "parameters": {
         "conditions": {
-          "number": [
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
             {
-              "value1": "={{ $json.length }}",
-              "operation": "larger",
-              "value2": 0
+              "id": "cond-001",
+              "leftValue": "={{ ($json.result || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "largerEqual"
+              }
             }
-          ]
-        }
-      },
-      "id": "a1b2c3d4-0003-0003-0003-000000000003",
-      "name": "¿Hay ajustes nuevos?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [680, 300]
-    },
-    {
-      "parameters": {
-        "operation": "getAll",
-        "resource": "record",
-        "options": {
-          "model": "stock.move",
-          "filters": [
-            ["inventory_id", "in", "={{ $json.map(item => item.id) }}"]
           ],
-          "fields": [
-            "id",
-            "product_id",
-            "product_uom_qty",
-            "quantity_done",
-            "inventory_id",
-            "location_id",
-            "location_dest_id",
-            "date"
-          ]
-        }
+          "combinator": "and"
+        },
+        "options": {}
       },
-      "id": "a1b2c3d4-0004-0004-0004-000000000004",
-      "name": "Obtener Movimientos de Stock",
-      "type": "n8n-nodes-base.odoo",
-      "typeVersion": 1,
-      "position": [900, 200],
-      "credentials": {
-        "odooApi": {
-          "id": "odoo_cred",
-          "name": "Odoo API"
-        }
-      }
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [144, 0],
+      "id": "node-0004",
+      "name": "¿Hay ajustes nuevos?"
     },
     {
       "parameters": {
-        "jsCode": "const ajustes = $('Obtener Ajustes de Inventario').all();\nconst movimientos = $('Obtener Movimientos de Stock').all();\n\nlet tablaHTML = `\n<table border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:13px;\">\n  <thead style=\"background-color:#2c7be5;color:white;\">\n    <tr>\n      <th>Ajuste</th>\n      <th>Fecha</th>\n      <th>Responsable</th>\n      <th>Producto</th>\n      <th>Cantidad Esperada</th>\n      <th>Cantidad Real</th>\n      <th>Diferencia</th>\n      <th>Ubicación</th>\n    </tr>\n  </thead>\n  <tbody>\n`;\n\nfor (const ajuste of ajustes) {\n  const aj = ajuste.json;\n  const movs = movimientos.filter(m => m.json.inventory_id && m.json.inventory_id[0] === aj.id);\n\n  if (movs.length === 0) {\n    tablaHTML += `\n    <tr>\n      <td>${aj.name || 'Sin nombre'}</td>\n      <td>${aj.date || ''}</td>\n      <td>${aj.user_id ? aj.user_id[1] : 'N/A'}</td>\n      <td colspan=\"4\" style=\"text-align:center;color:#888;\">Sin movimientos registrados</td>\n      <td></td>\n    </tr>`;\n  } else {\n    for (let i = 0; i < movs.length; i++) {\n      const m = movs[i].json;\n      const esperado = m.product_uom_qty || 0;\n      const real = m.quantity_done || 0;\n      const diferencia = real - esperado;\n      const colorDif = diferencia < 0 ? 'color:red;' : diferencia > 0 ? 'color:green;' : 'color:gray;';\n\n      tablaHTML += `\n      <tr style=\"background-color:${i % 2 === 0 ? '#f9f9f9' : '#ffffff'}\">\n        ${i === 0 ? `<td rowspan=\"${movs.length}\">${aj.name || 'Sin nombre'}</td>` : ''}\n        ${i === 0 ? `<td rowspan=\"${movs.length}\">${new Date(aj.date).toLocaleString('es-MX')}</td>` : ''}\n        ${i === 0 ? `<td rowspan=\"${movs.length}\">${aj.user_id ? aj.user_id[1] : 'N/A'}</td>` : ''}\n        <td>${m.product_id ? m.product_id[1] : 'N/A'}</td>\n        <td style=\"text-align:center;\">${esperado}</td>\n        <td style=\"text-align:center;\">${real}</td>\n        <td style=\"text-align:center;${colorDif}\"><b>${diferencia > 0 ? '+' : ''}${diferencia}</b></td>\n        <td>${m.location_id ? m.location_id[1] : ''} → ${m.location_dest_id ? m.location_dest_id[1] : ''}</td>\n      </tr>`;\n    }\n  }\n}\n\ntablaHTML += `\n  </tbody>\n</table>`;\n\nconst totalAjustes = ajustes.length;\nconst totalMovimientos = movimientos.length;\n\nreturn [{\n  json: {\n    tablaHTML,\n    totalAjustes,\n    totalMovimientos,\n    fecha: new Date().toLocaleString('es-MX')\n  }\n}];\n"
+        "jsCode": "var moves = $('Buscar Ajustes de Inventario').first().json.result || [];\nvar params = $('Calcular Ventana de Tiempo').first().json;\n\nif (moves.length === 0) {\n  return [{ json: { output: 'sin_ajustes' } }];\n}\n\n// Agrupar por referencia/ajuste\nvar grupos = {};\nfor (var i = 0; i < moves.length; i++) {\n  var m = moves[i];\n  var ref = m.reference || m.origin || m.name || 'Sin referencia';\n  if (!grupos[ref]) grupos[ref] = [];\n  grupos[ref].push(m);\n}\n\nvar totalMovs = moves.length;\nvar totalGrupos = Object.keys(grupos).length;\n\nvar filas = '';\nvar bgToggle = false;\nObject.keys(grupos).forEach(function(ref) {\n  var movs = grupos[ref];\n  movs.forEach(function(m, idx) {\n    var esperado = parseFloat(m.product_uom_qty) || 0;\n    var real = parseFloat(m.quantity_done) || 0;\n    var diff = real - esperado;\n    var diffColor = diff < 0 ? '#dc3545' : diff > 0 ? '#28a745' : '#6c757d';\n    var diffStr = (diff > 0 ? '+' : '') + diff.toFixed(2);\n    var bg = bgToggle ? '#f8f9fa' : '#ffffff';\n    var producto = m.product_id ? m.product_id[1] : 'N/A';\n    var locOrigen = m.location_id ? m.location_id[1] : '';\n    var locDest = m.location_dest_id ? m.location_dest_id[1] : '';\n    var fecha = m.date ? m.date.replace('T', ' ').substring(0, 16) : '';\n    var empresa = m.company_id ? m.company_id[1] : '';\n\n    if (idx === 0) {\n      filas += '<tr style=\"background:' + bg + '\">';\n      filas += '<td rowspan=\"' + movs.length + '\" style=\"padding:8px 10px;border:1px solid #dee2e6;vertical-align:top;font-weight:600;\">' + ref + '</td>';\n      filas += '<td rowspan=\"' + movs.length + '\" style=\"padding:8px 10px;border:1px solid #dee2e6;vertical-align:top;font-size:12px;color:#555;\">' + fecha + '</td>';\n      filas += '<td rowspan=\"' + movs.length + '\" style=\"padding:8px 10px;border:1px solid #dee2e6;vertical-align:top;font-size:12px;color:#555;\">' + empresa + '</td>';\n    } else {\n      filas += '<tr style=\"background:' + bg + '\">';\n    }\n\n    filas += '<td style=\"padding:8px 10px;border:1px solid #dee2e6;\">' + producto + '</td>';\n    filas += '<td style=\"padding:8px 10px;border:1px solid #dee2e6;text-align:center;\">' + esperado.toFixed(2) + '</td>';\n    filas += '<td style=\"padding:8px 10px;border:1px solid #dee2e6;text-align:center;\">' + real.toFixed(2) + '</td>';\n    filas += '<td style=\"padding:8px 10px;border:1px solid #dee2e6;text-align:center;font-weight:700;color:' + diffColor + ';\">' + diffStr + '</td>';\n    filas += '<td style=\"padding:8px 10px;border:1px solid #dee2e6;font-size:12px;color:#555;\">' + locOrigen + ' → ' + locDest + '</td>';\n    filas += '</tr>';\n\n    bgToggle = !bgToggle;\n  });\n});\n\nvar tabla = '<table style=\"width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;\">' +\n  '<thead>' +\n  '<tr style=\"background:#0066CC;color:#fff;\">' +\n  '<th style=\"padding:10px;text-align:left;\">Referencia</th>' +\n  '<th style=\"padding:10px;text-align:left;\">Fecha</th>' +\n  '<th style=\"padding:10px;text-align:left;\">Empresa</th>' +\n  '<th style=\"padding:10px;text-align:left;\">Producto</th>' +\n  '<th style=\"padding:10px;text-align:center;\">Cant. Esperada</th>' +\n  '<th style=\"padding:10px;text-align:center;\">Cant. Real</th>' +\n  '<th style=\"padding:10px;text-align:center;\">Diferencia</th>' +\n  '<th style=\"padding:10px;text-align:left;\">Ubicación</th>' +\n  '</tr>' +\n  '</thead>' +\n  '<tbody>' + filas + '</tbody>' +\n  '</table>';\n\nreturn [{ json: {\n  tabla: tabla,\n  totalMovs: totalMovs,\n  totalGrupos: totalGrupos,\n  now_label: params.now_label\n} }];"
       },
-      "id": "a1b2c3d4-0005-0005-0005-000000000005",
-      "name": "Construir Reporte HTML",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 200]
+      "position": [352, -96],
+      "id": "node-0005",
+      "name": "Construir Tabla HTML"
     },
     {
       "parameters": {
-        "fromEmail": "alertas@tuempresa.com",
-        "toEmail": "tu_correo@ejemplo.com",
-        "subject": "=🔔 Alerta Inventario Odoo — {{ $json.totalAjustes }} ajuste(s) detectado(s) — {{ $json.fecha }}",
-        "emailType": "html",
-        "message": "=<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n  <meta charset=\"UTF-8\">\n  <style>\n    body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; }\n    .container { max-width: 900px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }\n    .header { background: #2c7be5; color: white; padding: 24px 32px; }\n    .header h1 { margin: 0; font-size: 22px; }\n    .header p { margin: 6px 0 0; opacity: 0.85; font-size: 14px; }\n    .body { padding: 24px 32px; }\n    .stats { display: flex; gap: 16px; margin-bottom: 24px; }\n    .stat { background: #f0f5ff; border-radius: 6px; padding: 12px 20px; flex: 1; text-align: center; }\n    .stat .num { font-size: 28px; font-weight: bold; color: #2c7be5; }\n    .stat .label { font-size: 12px; color: #666; margin-top: 4px; }\n    .footer { background: #f4f6f8; padding: 16px 32px; text-align: center; font-size: 12px; color: #999; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>🔔 Alerta de Ajustes de Inventario — Odoo</h1>\n      <p>Generado: {{ $json.fecha }}</p>\n    </div>\n    <div class=\"body\">\n      <div class=\"stats\">\n        <div class=\"stat\">\n          <div class=\"num\">{{ $json.totalAjustes }}</div>\n          <div class=\"label\">Ajustes realizados</div>\n        </div>\n        <div class=\"stat\">\n          <div class=\"num\">{{ $json.totalMovimientos }}</div>\n          <div class=\"label\">Movimientos de stock</div>\n        </div>\n      </div>\n      <h3 style=\"color:#333;margin-bottom:12px;\">Detalle de ajustes</h3>\n      {{ $json.tablaHTML }}\n    </div>\n    <div class=\"footer\">\n      Este correo fue generado automáticamente por n8n · Monitoreo de inventario Odoo\n    </div>\n  </div>\n</body>\n</html>"
+        "sendTo": "chatgptsupricom@gmail.com",
+        "subject": "=🔔 Alerta Inventario Odoo — {{ $json.totalGrupos }} ajuste(s), {{ $json.totalMovs }} movimiento(s) — {{ $json.now_label }}",
+        "message": "=<div style=\"font-family:Arial,sans-serif;max-width:900px;margin:0 auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;\">\n  <div style=\"background:#0066CC;padding:20px 28px;\">\n    <h2 style=\"color:#fff;margin:0;font-size:20px;\">🔔 SUPRICOM — Ajustes de Inventario Detectados</h2>\n    <p style=\"color:#cce0ff;margin:6px 0 0;font-size:13px;\">{{ $json.now_label }}</p>\n  </div>\n  <div style=\"padding:24px 28px;\">\n    <div style=\"display:flex;gap:16px;margin-bottom:24px;\">\n      <div style=\"background:#e8f0fe;border-radius:6px;padding:14px 24px;flex:1;text-align:center;\">\n        <div style=\"font-size:30px;font-weight:700;color:#0066CC;\">{{ $json.totalGrupos }}</div>\n        <div style=\"font-size:12px;color:#555;margin-top:4px;\">Ajustes realizados</div>\n      </div>\n      <div style=\"background:#e8f0fe;border-radius:6px;padding:14px 24px;flex:1;text-align:center;\">\n        <div style=\"font-size:30px;font-weight:700;color:#0066CC;\">{{ $json.totalMovs }}</div>\n        <div style=\"font-size:12px;color:#555;margin-top:4px;\">Líneas de movimiento</div>\n      </div>\n    </div>\n    <h3 style=\"color:#333;margin:0 0 12px;\">Detalle de ajustes</h3>\n    <div style=\"overflow-x:auto;\">\n      {{ $json.tabla }}\n    </div>\n  </div>\n  <div style=\"background:#f0f4f8;padding:14px 28px;text-align:center;\">\n    <p style=\"font-size:12px;color:#999;margin:0;\">Alerta automática generada por n8n · SUPRICOM 🦁</p>\n  </div>\n</div>",
+        "options": {}
       },
-      "id": "a1b2c3d4-0006-0006-0006-000000000006",
-      "name": "Enviar Alerta por Correo",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2,
-      "position": [1340, 200],
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [560, -96],
+      "id": "node-0006",
+      "name": "Enviar Alerta Gmail",
       "credentials": {
-        "smtp": {
-          "id": "smtp_cred",
-          "name": "SMTP Correo"
+        "gmailOAuth2": {
+          "id": "km7PyKWLEZgHHMzw",
+          "name": "Gmail account"
         }
       }
     },
     {
       "parameters": {},
-      "id": "a1b2c3d4-0007-0007-0007-000000000007",
-      "name": "Sin ajustes — terminar",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [900, 420]
+      "position": [352, 112],
+      "id": "node-0007",
+      "name": "Sin ajustes — terminar"
     }
   ],
   "connections": {
     "Cada 15 minutos": {
-      "main": [
-        [
-          {
-            "node": "Obtener Ajustes de Inventario",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Calcular Ventana de Tiempo", "type": "main", "index": 0 }]]
     },
-    "Obtener Ajustes de Inventario": {
-      "main": [
-        [
-          {
-            "node": "¿Hay ajustes nuevos?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Calcular Ventana de Tiempo": {
+      "main": [[{ "node": "Buscar Ajustes de Inventario", "type": "main", "index": 0 }]]
+    },
+    "Buscar Ajustes de Inventario": {
+      "main": [[{ "node": "¿Hay ajustes nuevos?", "type": "main", "index": 0 }]]
     },
     "¿Hay ajustes nuevos?": {
       "main": [
-        [
-          {
-            "node": "Obtener Movimientos de Stock",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Sin ajustes — terminar",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Construir Tabla HTML", "type": "main", "index": 0 }],
+        [{ "node": "Sin ajustes — terminar", "type": "main", "index": 0 }]
       ]
     },
-    "Obtener Movimientos de Stock": {
-      "main": [
-        [
-          {
-            "node": "Construir Reporte HTML",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Construir Reporte HTML": {
-      "main": [
-        [
-          {
-            "node": "Enviar Alerta por Correo",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Construir Tabla HTML": {
+      "main": [[{ "node": "Enviar Alerta Gmail", "type": "main", "index": 0 }]]
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "binaryMode": "separate"
   },
-  "staticData": null,
-  "tags": ["inventario", "odoo", "alertas"],
+  "pinData": {},
   "meta": {
-    "instanceId": "odoo-inventory-alert-v1"
-  }
+    "instanceId": "1683493ca79f362f0cdd6311bf11f1609621e8cd207e078485d8ca15ccb3975a"
+  },
+  "tags": ["inventario", "odoo", "alertas"]
 }

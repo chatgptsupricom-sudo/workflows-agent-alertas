@@ -16,30 +16,15 @@ Flujo de n8n que consulta Odoo cada 15 minutos y envía un correo con el detalle
 
 ## Requisitos
 
-### 1. Credencial Odoo (`Odoo API`)
-En n8n → Credenciales → Nueva → **Odoo**:
+### 1. Odoo via JSONRPC (HTTP Request)
+El flujo usa el mismo patrón que tus otros workflows: llamadas directas a `https://supricom2.odoo.com/jsonrpc` con las credenciales ya embebidas en el nodo. **No necesita credencial separada de n8n** — ya está configurado con tu db, uid y api_key.
 
-| Campo | Valor |
-|-------|-------|
-| URL | `https://tu-instancia.odoo.com` |
-| Database | nombre de tu base de datos |
-| Username | tu usuario Odoo |
-| Password / API Key | tu contraseña o API key |
-
-### 2. Credencial SMTP (`SMTP Correo`)
-En n8n → Credenciales → Nueva → **SMTP**:
-
-| Campo | Valor |
-|-------|-------|
-| Host | p.ej. `smtp.gmail.com` |
-| Port | `465` (SSL) o `587` (TLS) |
-| User | tu correo |
-| Password | contraseña o app password |
+### 2. Gmail OAuth2
+El nodo de correo usa tu credencial existente `Gmail account` (id: `km7PyKWLEZgHHMzw`). Si n8n la detecta por ID, no necesitas hacer nada. Si no, reasígnala manualmente en el nodo **"Enviar Alerta Gmail"**.
 
 ### 3. Configurar el correo destino
-Abre el nodo **"Enviar Alerta por Correo"** y edita:
-- `fromEmail` → correo remitente
-- `toEmail` → tu correo (puede ser una lista separada por comas)
+Abre el nodo **"Enviar Alerta Gmail"** y edita:
+- `sendTo` → el correo o correos donde quieres recibir las alertas (separados por coma)
 
 ## Instalación
 
