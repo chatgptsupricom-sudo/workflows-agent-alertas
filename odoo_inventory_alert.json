@@ -110,8 +110,10 @@
     },
     "Calcular Ventana de Tiempo": {
       "main": [
-        [{ "node": "Buscar Ajustes Negativos", "type": "main", "index": 0 }],
-        [{ "node": "Buscar Salidas Sin Venta", "type": "main", "index": 0 }]
+        [
+          { "node": "Buscar Ajustes Negativos", "type": "main", "index": 0 },
+          { "node": "Buscar Salidas Sin Venta", "type": "main", "index": 0 }
+        ]
       ]
     },
     "Buscar Ajustes Negativos": {
