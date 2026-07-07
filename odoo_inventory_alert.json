@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "jsCode": "var now = new Date();\nvar cutoff = new Date(now.getTime() - 15 * 60 * 1000);\n\nfunction pad(n) { return String(n).padStart(2, '0'); }\n\nfunction toOdooDatetime(d) {\n  return d.getUTCFullYear() + '-' +\n    pad(d.getUTCMonth() + 1) + '-' +\n    pad(d.getUTCDate()) + ' ' +\n    pad(d.getUTCHours()) + ':' +\n    pad(d.getUTCMinutes()) + ':' +\n    pad(d.getUTCSeconds());\n}\n\nreturn [{ json: {\n  cutoff: toOdooDatetime(cutoff),\n  now_label: now.toLocaleString('es-VE', { timeZone: 'America/Caracas' })\n} }];"
+        "jsCode": "var now = new Date();\nvar cutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000); // PRUEBA: 90 días — cambiar a 15 * 60 * 1000 en producción\n\nfunction pad(n) { return String(n).padStart(2, '0'); }\n\nfunction toOdooDatetime(d) {\n  return d.getUTCFullYear() + '-' +\n    pad(d.getUTCMonth() + 1) + '-' +\n    pad(d.getUTCDate()) + ' ' +\n    pad(d.getUTCHours()) + ':' +\n    pad(d.getUTCMinutes()) + ':' +\n    pad(d.getUTCSeconds());\n}\n\nreturn [{ json: {\n  cutoff: toOdooDatetime(cutoff),\n  now_label: now.toLocaleString('es-VE', { timeZone: 'America/Caracas' })\n} }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
