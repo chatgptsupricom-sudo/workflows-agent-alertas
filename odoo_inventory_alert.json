@@ -40,7 +40,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{\n  JSON.stringify({\n    jsonrpc: '2.0', method: 'call', id: null,\n    params: {\n      service: 'object', method: 'execute_kw',\n      args: [\n        'supricom-prod1-25424683', 388,\n        '47d01399e318452857e554e82184aaf4745b47a1',\n        'stock.move', 'search_read',\n        [[\n          ['state', '=', 'done'],\n          ['date', '>=', $json.cutoff],\n          '|',\n          ['location_id.usage', '=', 'inventory'],\n          ['location_dest_id.usage', '=', 'inventory']\n        ]],\n        {\n          fields: [\n            'name', 'reference', 'date',\n            'product_id', 'product_uom_qty', 'quantity',\n            'location_id', 'location_dest_id',\n            'company_id', 'origin'\n          ],\n          limit: 500,\n          context: { allowed_company_ids: [9, 10, 7] }\n        }\n      ]\n    }\n  })\n}}",
+        "jsonBody": "={{\n  JSON.stringify({\n    jsonrpc: '2.0', method: 'call', id: null,\n    params: {\n      service: 'object', method: 'execute_kw',\n      args: [\n        'supricom-prod1-25424683', 388,\n        '47d01399e318452857e554e82184aaf4745b47a1',\n        'stock.quant', 'search_read',\n        [[\n          ['inventory_date', '!=', false]\n        ]],\n        {\n          fields: [\n            'product_id', 'location_id', 'quantity',\n            'inventory_quantity', 'inventory_diff_quantity',\n            'inventory_date', 'user_id', 'company_id'\n          ],\n          limit: 10,\n          order: 'inventory_date desc',\n          context: { allowed_company_ids: [9, 10, 7] }\n        }\n      ]\n    }\n  })\n}}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
