@@ -38,7 +38,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{\n  JSON.stringify({\n    jsonrpc: '2.0', method: 'call', id: null,\n    params: {\n      service: 'object', method: 'execute_kw',\n      args: [\n        'supricom-prod1-25424683', 388,\n        '47d01399e318452857e554e82184aaf4745b47a1',\n        'stock.move', 'search_read',\n        [[\n          ['state', '=', 'done'],\n          ['date', '>=', $json.cutoff],\n          ['location_dest_id', '=', 68]\n        ]],\n        {\n          fields: ['date', 'product_id', 'quantity', 'location_id', 'company_id', 'write_uid', 'origin', 'picking_id'],\n          limit: 200,\n          order: 'date desc',\n          context: { allowed_company_ids: [9, 10, 7] }\n        }\n      ]\n    }\n  })\n}}",
+        "jsonBody": "={{\n  JSON.stringify({\n    jsonrpc: '2.0', method: 'call', id: null,\n    params: {\n      service: 'object', method: 'execute_kw',\n      args: [\n        'supricom-prod1-25424683', 388,\n        '47d01399e318452857e554e82184aaf4745b47a1',\n        'stock.move', 'search_read',\n        [[\n          ['state', '=', 'done'],\n          ['date', '>=', $json.cutoff],\n          ['location_dest_id', '=', 68],\n          ['write_uid.name', '!=', 'OdooBot']\n        ]],\n        {\n          fields: ['date', 'product_id', 'quantity', 'location_id', 'company_id', 'write_uid', 'origin', 'picking_id'],\n          limit: 200,\n          order: 'date desc',\n          context: { allowed_company_ids: [9, 10, 7] }\n        }\n      ]\n    }\n  })\n}}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
