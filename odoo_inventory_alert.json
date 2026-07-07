@@ -1,5 +1,5 @@
 {
-  "name": "Odoo - Alerta Ajustes de Inventario",
+  "name": "Odoo - Alerta Anti-Robo Inventario",
   "nodes": [
     {
       "parameters": {
@@ -14,17 +14,17 @@
       },
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [-480, 0],
+      "position": [-640, 0],
       "id": "node-0001",
       "name": "Cada 15 minutos"
     },
     {
       "parameters": {
-        "jsCode": "var now = new Date();\nvar cutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000); // PRUEBA: 90 días — cambiar a 15 * 60 * 1000 en producción\n\nfunction pad(n) { return String(n).padStart(2, '0'); }\n\nfunction toOdooDatetime(d) {\n  return d.getUTCFullYear() + '-' +\n    pad(d.getUTCMonth() + 1) + '-' +\n    pad(d.getUTCDate()) + ' ' +\n    pad(d.getUTCHours()) + ':' +\n    pad(d.getUTCMinutes()) + ':' +\n    pad(d.getUTCSeconds());\n}\n\nreturn [{ json: {\n  cutoff: toOdooDatetime(cutoff),\n  now_label: now.toLocaleString('es-VE', { timeZone: 'America/Caracas' })\n} }];"
+        "jsCode": "var now = new Date();\nvar cutoff = new Date(now.getTime() - 15 * 60 * 1000);\n\nfunction pad(n) { return String(n).padStart(2, '0'); }\nfunction toOdoo(d) {\n  return d.getUTCFullYear() + '-' + pad(d.getUTCMonth()+1) + '-' + pad(d.getUTCDate()) +\n    ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds());\n}\n\nreturn [{ json: {\n  cutoff: toOdoo(cutoff),\n  now_label: now.toLocaleString('es-VE', { timeZone: 'America/Caracas' })\n} }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-272, 0],
+      "position": [-432, 0],
       "id": "node-0002",
       "name": "Calcular Ventana de Tiempo"
     },
@@ -34,30 +34,18 @@
         "url": "https://supricom2.odoo.com/jsonrpc",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
-          ]
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{\n  JSON.stringify({\n    jsonrpc: '2.0', method: 'call', id: null,\n    params: {\n      service: 'object', method: 'execute_kw',\n      args: [\n        'supricom-prod1-25424683', 388,\n        '47d01399e318452857e554e82184aaf4745b47a1',\n        'stock.move', 'search_read',\n        [[\n          ['state', '=', 'done'],\n          ['date', '>=', $json.cutoff],\n          '|',\n          ['location_id', '=', 68],\n          ['location_dest_id', '=', 68]\n        ]],\n        {\n          fields: [\n            'date', 'product_id', 'quantity',\n            'location_id', 'location_dest_id', 'company_id'\n          ],\n          limit: 500,\n          order: 'date desc',\n          context: { allowed_company_ids: [9, 10, 7] }\n        }\n      ]\n    }\n  })\n}}",
+        "jsonBody": "={{\n  JSON.stringify({\n    jsonrpc: '2.0', method: 'call', id: null,\n    params: {\n      service: 'object', method: 'execute_kw',\n      args: [\n        'supricom-prod1-25424683', 388,\n        '47d01399e318452857e554e82184aaf4745b47a1',\n        'stock.move', 'search_read',\n        [[\n          ['state', '=', 'done'],\n          ['date', '>=', $json.cutoff],\n          ['location_dest_id', '=', 68]\n        ]],\n        {\n          fields: ['date', 'product_id', 'quantity', 'location_id', 'company_id', 'write_uid'],\n          limit: 200,\n          order: 'date desc',\n          context: { allowed_company_ids: [9, 10, 7] }\n        }\n      ]\n    }\n  })\n}}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [-64, 0],
+      "position": [-224, -112],
       "id": "node-0003",
-      "name": "Buscar Ajustes de Inventario"
-    },
-    {
-      "parameters": {
-        "jsCode": "var moves = $json.result || [];\nif (moves.length === 0) return [];\n\n// Extraer pares únicos product_id + location real\nvar pares = {};\nfor (var i = 0; i < moves.length; i++) {\n  var m = moves[i];\n  var pid = m.product_id ? m.product_id[0] : null;\n  // La ubicación real es la que NO es 68 (virtual)\n  var locId = (m.location_dest_id && m.location_dest_id[0] === 68)\n    ? (m.location_id ? m.location_id[0] : null)\n    : (m.location_dest_id ? m.location_dest_id[0] : null);\n  if (pid && locId) {\n    pares[pid + '_' + locId] = { pid: pid, locId: locId };\n  }\n}\n\nvar productIds = [];\nvar locationIds = [];\nObject.values(pares).forEach(function(p) {\n  if (productIds.indexOf(p.pid) === -1) productIds.push(p.pid);\n  if (locationIds.indexOf(p.locId) === -1) locationIds.push(p.locId);\n});\n\nreturn [{ json: {\n  moves: moves,\n  productIds: productIds,\n  locationIds: locationIds\n} }];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [144, 0],
-      "id": "node-0004",
-      "name": "Extraer Productos y Ubicaciones"
+      "name": "Buscar Ajustes Negativos"
     },
     {
       "parameters": {
@@ -65,42 +53,40 @@
         "url": "https://supricom2.odoo.com/jsonrpc",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
-          ]
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{\n  JSON.stringify({\n    jsonrpc: '2.0', method: 'call', id: null,\n    params: {\n      service: 'object', method: 'execute_kw',\n      args: [\n        'supricom-prod1-25424683', 388,\n        '47d01399e318452857e554e82184aaf4745b47a1',\n        'stock.quant', 'search_read',\n        [[\n          ['product_id', 'in', $json.productIds],\n          ['location_id', 'in', $json.locationIds]\n        ]],\n        {\n          fields: ['product_id', 'location_id', 'quantity'],\n          limit: 0,\n          context: { allowed_company_ids: [9, 10, 7] }\n        }\n      ]\n    }\n  })\n}}",
+        "jsonBody": "={{\n  JSON.stringify({\n    jsonrpc: '2.0', method: 'call', id: null,\n    params: {\n      service: 'object', method: 'execute_kw',\n      args: [\n        'supricom-prod1-25424683', 388,\n        '47d01399e318452857e554e82184aaf4745b47a1',\n        'stock.picking', 'search_read',\n        [[\n          ['state', '=', 'done'],\n          ['date_done', '>=', $json.cutoff],\n          ['picking_type_code', '=', 'outgoing'],\n          ['sale_id', '=', false]\n        ]],\n        {\n          fields: ['name', 'date_done', 'partner_id', 'user_id', 'company_id', 'origin', 'move_ids'],\n          limit: 100,\n          order: 'date_done desc',\n          context: { allowed_company_ids: [9, 10, 7] }\n        }\n      ]\n    }\n  })\n}}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [352, 0],
-      "id": "node-0005",
-      "name": "Obtener Stock Actual"
+      "position": [-224, 112],
+      "id": "node-0004",
+      "name": "Buscar Salidas Sin Venta"
     },
     {
       "parameters": {
-        "jsCode": "var quants = $json.result || [];\nvar moves = $('Extraer Productos y Ubicaciones').first().json.moves || [];\nvar params = $('Calcular Ventana de Tiempo').first().json;\n\n// Mapa de stock actual: 'productId_locationId' -> quantity\nvar stockMap = {};\nfor (var i = 0; i < quants.length; i++) {\n  var q = quants[i];\n  var pid = q.product_id ? q.product_id[0] : null;\n  var lid = q.location_id ? q.location_id[0] : null;\n  if (pid && lid) stockMap[pid + '_' + lid] = q.quantity || 0;\n}\n\n// Agrupar movimientos por fecha (minuto) + empresa\nvar grupos = {};\nfor (var j = 0; j < moves.length; j++) {\n  var m = moves[j];\n  var fechaMin = (m.date || '').substring(0, 16);\n  var empresa = m.company_id ? m.company_id[1] : 'Sin empresa';\n  var key = fechaMin + '||' + empresa;\n  if (!grupos[key]) grupos[key] = { fecha: fechaMin, empresa: empresa, movs: [] };\n  grupos[key].movs.push(m);\n}\n\nvar totalMovs = moves.length;\nvar totalAjustes = Object.keys(grupos).length;\n\nvar filas = '';\nvar bgToggle = false;\n\nObject.keys(grupos).sort().reverse().forEach(function(key) {\n  var g = grupos[key];\n  g.movs.forEach(function(m, idx) {\n    var pid = m.product_id ? m.product_id[0] : null;\n    var esReduccion = m.location_dest_id && m.location_dest_id[0] === 68;\n    // Ubicación real del producto (la que no es virtual)\n    var locReal = esReduccion\n      ? (m.location_id ? m.location_id[0] : null)\n      : (m.location_dest_id ? m.location_dest_id[0] : null);\n    var locNombre = esReduccion\n      ? (m.location_id ? m.location_id[1] : '')\n      : (m.location_dest_id ? m.location_dest_id[1] : '');\n\n    var stockActual = (pid && locReal) ? (stockMap[pid + '_' + locReal] || 0) : 0;\n    var movQty = parseFloat(m.quantity) || 0;\n\n    // Calcular antes y después\n    var despues = stockActual;\n    var antes = esReduccion ? stockActual + movQty : stockActual - movQty;\n    var diff = despues - antes; // negativo = bajó, positivo = subió\n    var diffStr = (diff >= 0 ? '+' : '') + diff.toFixed(2);\n    var diffColor = diff < 0 ? '#dc3545' : diff > 0 ? '#28a745' : '#6c757d';\n    var tipoIcono = esReduccion ? '🔻' : '🔺';\n    var tipoBg = esReduccion ? '#fff5f5' : '#f0fff4';\n\n    var producto = m.product_id ? m.product_id[1] : 'N/A';\n    var bg = idx % 2 === 0 ? '#ffffff' : '#f8f9fa';\n\n    if (idx === 0) {\n      filas += '<tr style=\"background:' + bg + '\">';\n      filas += '<td rowspan=\"' + g.movs.length + '\" style=\"padding:8px 10px;border:1px solid #dee2e6;vertical-align:top;font-weight:600;white-space:nowrap;font-size:12px;\">' + g.fecha.replace('T',' ') + '</td>';\n      filas += '<td rowspan=\"' + g.movs.length + '\" style=\"padding:8px 10px;border:1px solid #dee2e6;vertical-align:top;font-size:12px;color:#555;\">' + g.empresa + '</td>';\n    } else {\n      filas += '<tr style=\"background:' + bg + '\">';\n    }\n\n    filas += '<td style=\"padding:8px 10px;border:1px solid #dee2e6;font-size:12px;\">' + producto + '</td>';\n    filas += '<td style=\"padding:8px 10px;border:1px solid #dee2e6;font-size:12px;color:#555;\">' + locNombre + '</td>';\n    filas += '<td style=\"padding:8px 10px;border:1px solid #dee2e6;text-align:center;font-size:13px;\">' + antes.toFixed(2) + '</td>';\n    filas += '<td style=\"padding:8px 10px;border:1px solid #dee2e6;text-align:center;font-size:13px;\">' + despues.toFixed(2) + '</td>';\n    filas += '<td style=\"padding:8px 10px;border:1px solid #dee2e6;text-align:center;font-weight:700;color:' + diffColor + ';\">' + tipoIcono + ' ' + diffStr + '</td>';\n    filas += '</tr>';\n\n    bgToggle = !bgToggle;\n  });\n});\n\nvar tabla = '<table style=\"width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;\">' +\n  '<thead>' +\n  '<tr style=\"background:#0066CC;color:#fff;\">' +\n  '<th style=\"padding:10px;text-align:left;\">Fecha</th>' +\n  '<th style=\"padding:10px;text-align:left;\">Empresa</th>' +\n  '<th style=\"padding:10px;text-align:left;\">Producto</th>' +\n  '<th style=\"padding:10px;text-align:left;\">Ubicación</th>' +\n  '<th style=\"padding:10px;text-align:center;\">Stock Antes</th>' +\n  '<th style=\"padding:10px;text-align:center;\">Stock Después</th>' +\n  '<th style=\"padding:10px;text-align:center;\">Diferencia</th>' +\n  '</tr>' +\n  '</thead>' +\n  '<tbody>' + filas + '</tbody>' +\n  '</table>';\n\nreturn [{ json: {\n  tabla: tabla,\n  totalMovs: totalMovs,\n  totalAjustes: totalAjustes,\n  now_label: params.now_label\n} }];"
+        "jsCode": "var ajustes = $('Buscar Ajustes Negativos').first().json.result || [];\nvar salidas = $('Buscar Salidas Sin Venta').first().json.result || [];\nvar params = $('Calcular Ventana de Tiempo').first().json;\n\nvar hayAlertas = ajustes.length > 0 || salidas.length > 0;\nif (!hayAlertas) return [];\n\n// ── SECCIÓN 1: Ajustes negativos ──────────────────────────────\nvar secAjustes = '';\nif (ajustes.length > 0) {\n  var filasAj = '';\n  ajustes.forEach(function(m, i) {\n    var bg = i % 2 === 0 ? '#ffffff' : '#fff5f5';\n    var producto = m.product_id ? m.product_id[1] : 'N/A';\n    var ubicacion = m.location_id ? m.location_id[1] : 'N/A';\n    var empresa = m.company_id ? m.company_id[1] : 'N/A';\n    var usuario = m.write_uid ? m.write_uid[1] : 'Desconocido';\n    var cantidad = parseFloat(m.quantity) || 0;\n    var fecha = (m.date || '').substring(0, 16).replace('T', ' ');\n\n    filasAj += '<tr style=\"background:' + bg + '\">' +\n      '<td style=\"padding:8px 10px;border:1px solid #f5c6cb;font-size:12px;white-space:nowrap;\">' + fecha + '</td>' +\n      '<td style=\"padding:8px 10px;border:1px solid #f5c6cb;font-size:12px;\">' + empresa + '</td>' +\n      '<td style=\"padding:8px 10px;border:1px solid #f5c6cb;\">' + producto + '</td>' +\n      '<td style=\"padding:8px 10px;border:1px solid #f5c6cb;font-size:12px;\">' + ubicacion + '</td>' +\n      '<td style=\"padding:8px 10px;border:1px solid #f5c6cb;text-align:center;font-weight:700;color:#dc3545;\">-' + cantidad.toFixed(2) + '</td>' +\n      '<td style=\"padding:8px 10px;border:1px solid #f5c6cb;font-size:12px;color:#555;\">' + usuario + '</td>' +\n      '</tr>';\n  });\n\n  secAjustes = '<div style=\"margin-bottom:28px;\">' +\n    '<h3 style=\"color:#dc3545;margin:0 0 8px;font-size:15px;\">🔻 Ajustes manuales que reducen stock (' + ajustes.length + ')</h3>' +\n    '<table style=\"width:100%;border-collapse:collapse;font-size:13px;\">' +\n    '<thead><tr style=\"background:#dc3545;color:#fff;\">' +\n    '<th style=\"padding:9px 10px;text-align:left;\">Fecha</th>' +\n    '<th style=\"padding:9px 10px;text-align:left;\">Empresa</th>' +\n    '<th style=\"padding:9px 10px;text-align:left;\">Producto</th>' +\n    '<th style=\"padding:9px 10px;text-align:left;\">Ubicación</th>' +\n    '<th style=\"padding:9px 10px;text-align:center;\">Cant. Reducida</th>' +\n    '<th style=\"padding:9px 10px;text-align:left;\">Responsable</th>' +\n    '</tr></thead>' +\n    '<tbody>' + filasAj + '</tbody></table></div>';\n} else {\n  secAjustes = '<div style=\"margin-bottom:28px;\"><p style=\"color:#28a745;font-size:13px;\">✅ Sin ajustes negativos en el período.</p></div>';\n}\n\n// ── SECCIÓN 2: Salidas sin orden de venta ────────────────────\nvar secSalidas = '';\nif (salidas.length > 0) {\n  var filasS = '';\n  salidas.forEach(function(p, i) {\n    var bg = i % 2 === 0 ? '#ffffff' : '#fff8e1';\n    var empresa = p.company_id ? p.company_id[1] : 'N/A';\n    var responsable = p.user_id ? p.user_id[1] : 'Desconocido';\n    var cliente = p.partner_id ? p.partner_id[1] : 'Sin cliente';\n    var origen = p.origin || 'Sin origen';\n    var fecha = (p.date_done || '').substring(0, 16).replace('T', ' ');\n\n    filasS += '<tr style=\"background:' + bg + '\">' +\n      '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;white-space:nowrap;\">' + fecha + '</td>' +\n      '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;\">' + empresa + '</td>' +\n      '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-weight:600;\">' + p.name + '</td>' +\n      '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;\">' + cliente + '</td>' +\n      '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;color:#888;\">' + origen + '</td>' +\n      '<td style=\"padding:8px 10px;border:1px solid #ffd700;font-size:12px;color:#555;\">' + responsable + '</td>' +\n      '</tr>';\n  });\n\n  secSalidas = '<div style=\"margin-bottom:28px;\">' +\n    '<h3 style=\"color:#e67e00;margin:0 0 8px;font-size:15px;\">⚠️ Salidas de mercancía sin orden de venta (' + salidas.length + ')</h3>' +\n    '<table style=\"width:100%;border-collapse:collapse;font-size:13px;\">' +\n    '<thead><tr style=\"background:#e67e00;color:#fff;\">' +\n    '<th style=\"padding:9px 10px;text-align:left;\">Fecha</th>' +\n    '<th style=\"padding:9px 10px;text-align:left;\">Empresa</th>' +\n    '<th style=\"padding:9px 10px;text-align:left;\">Referencia</th>' +\n    '<th style=\"padding:9px 10px;text-align:left;\">Cliente</th>' +\n    '<th style=\"padding:9px 10px;text-align:left;\">Origen</th>' +\n    '<th style=\"padding:9px 10px;text-align:left;\">Responsable</th>' +\n    '</tr></thead>' +\n    '<tbody>' + filasS + '</tbody></table></div>';\n} else {\n  secSalidas = '<div style=\"margin-bottom:28px;\"><p style=\"color:#28a745;font-size:13px;\">✅ Todas las salidas tienen orden de venta asociada.</p></div>';\n}\n\nvar nivelAlerta = (ajustes.length > 0 && salidas.length > 0) ? '🚨 ALERTA MÁXIMA' :\n  ajustes.length > 0 ? '🔻 Ajuste sospechoso' : '⚠️ Salida sin venta';\n\nreturn [{ json: {\n  secAjustes: secAjustes,\n  secSalidas: secSalidas,\n  totalAjustes: ajustes.length,\n  totalSalidas: salidas.length,\n  nivelAlerta: nivelAlerta,\n  now_label: params.now_label\n} }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [560, 0],
-      "id": "node-0006",
-      "name": "Construir Tabla HTML"
+      "position": [80, 0],
+      "id": "node-0005",
+      "name": "Evaluar Alertas"
     },
     {
       "parameters": {
         "sendTo": "chatgptsupricom@gmail.com",
-        "subject": "=🔔 Alerta Inventario Odoo — {{ $json.totalAjustes }} ajuste(s), {{ $json.totalMovs }} producto(s) — {{ $json.now_label }}",
-        "message": "=<div style=\"font-family:Arial,sans-serif;max-width:960px;margin:0 auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;\">\n  <div style=\"background:#0066CC;padding:20px 28px;\">\n    <h2 style=\"color:#fff;margin:0;font-size:20px;\">🔔 SUPRICOM — Ajustes de Inventario Detectados</h2>\n    <p style=\"color:#cce0ff;margin:6px 0 0;font-size:13px;\">{{ $json.now_label }}</p>\n  </div>\n  <div style=\"padding:24px 28px;\">\n    <div style=\"display:flex;gap:16px;margin-bottom:24px;\">\n      <div style=\"background:#e8f0fe;border-radius:6px;padding:14px 24px;flex:1;text-align:center;\">\n        <div style=\"font-size:30px;font-weight:700;color:#0066CC;\">{{ $json.totalAjustes }}</div>\n        <div style=\"font-size:12px;color:#555;margin-top:4px;\">Ajustes realizados</div>\n      </div>\n      <div style=\"background:#e8f0fe;border-radius:6px;padding:14px 24px;flex:1;text-align:center;\">\n        <div style=\"font-size:30px;font-weight:700;color:#0066CC;\">{{ $json.totalMovs }}</div>\n        <div style=\"font-size:12px;color:#555;margin-top:4px;\">Productos ajustados</div>\n      </div>\n    </div>\n    <p style=\"font-size:12px;color:#888;margin:0 0 12px;\">🔺 Aumento de stock &nbsp;&nbsp; 🔻 Reducción de stock &nbsp;&nbsp; <em>Stock Antes/Después calculado sobre stock actual</em></p>\n    <h3 style=\"color:#333;margin:0 0 12px;\">Detalle de ajustes</h3>\n    <div style=\"overflow-x:auto;\">\n      {{ $json.tabla }}\n    </div>\n  </div>\n  <div style=\"background:#f0f4f8;padding:14px 28px;text-align:center;\">\n    <p style=\"font-size:12px;color:#999;margin:0;\">Alerta automática generada por n8n · SUPRICOM 🦁</p>\n  </div>\n</div>",
+        "subject": "={{ $json.nivelAlerta }} — Inventario Odoo · {{ $json.now_label }}",
+        "message": "=<div style=\"font-family:Arial,sans-serif;max-width:960px;margin:0 auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;\">\n  <div style=\"background:#b71c1c;padding:20px 28px;\">\n    <h2 style=\"color:#fff;margin:0;font-size:20px;\">🚨 SUPRICOM — Alerta de Seguridad de Inventario</h2>\n    <p style=\"color:#ffcdd2;margin:6px 0 0;font-size:13px;\">{{ $json.now_label }}</p>\n  </div>\n  <div style=\"background:#fff8f8;padding:12px 28px;border-bottom:1px solid #f5c6cb;\">\n    <span style=\"display:inline-block;background:#dc3545;color:#fff;border-radius:4px;padding:4px 12px;font-size:13px;font-weight:700;margin-right:8px;\">🔻 {{ $json.totalAjustes }} ajuste(s) negativos</span>\n    <span style=\"display:inline-block;background:#e67e00;color:#fff;border-radius:4px;padding:4px 12px;font-size:13px;font-weight:700;\">⚠️ {{ $json.totalSalidas }} salida(s) sin venta</span>\n  </div>\n  <div style=\"padding:24px 28px;\">\n    {{ $json.secAjustes }}\n    {{ $json.secSalidas }}\n  </div>\n  <div style=\"background:#f0f4f8;padding:14px 28px;text-align:center;\">\n    <p style=\"font-size:12px;color:#999;margin:0;\">Monitoreo automático de seguridad · n8n · SUPRICOM 🦁</p>\n  </div>\n</div>",
         "options": {}
       },
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
-      "position": [768, 0],
-      "id": "node-0007",
+      "position": [288, 0],
+      "id": "node-0006",
       "name": "Enviar Alerta Gmail",
       "credentials": {
         "gmailOAuth2": {
@@ -115,18 +101,18 @@
       "main": [[{ "node": "Calcular Ventana de Tiempo", "type": "main", "index": 0 }]]
     },
     "Calcular Ventana de Tiempo": {
-      "main": [[{ "node": "Buscar Ajustes de Inventario", "type": "main", "index": 0 }]]
+      "main": [
+        [{ "node": "Buscar Ajustes Negativos", "type": "main", "index": 0 }],
+        [{ "node": "Buscar Salidas Sin Venta", "type": "main", "index": 0 }]
+      ]
     },
-    "Buscar Ajustes de Inventario": {
-      "main": [[{ "node": "Extraer Productos y Ubicaciones", "type": "main", "index": 0 }]]
+    "Buscar Ajustes Negativos": {
+      "main": [[{ "node": "Evaluar Alertas", "type": "main", "index": 0 }]]
     },
-    "Extraer Productos y Ubicaciones": {
-      "main": [[{ "node": "Obtener Stock Actual", "type": "main", "index": 0 }]]
+    "Buscar Salidas Sin Venta": {
+      "main": [[{ "node": "Evaluar Alertas", "type": "main", "index": 1 }]]
     },
-    "Obtener Stock Actual": {
-      "main": [[{ "node": "Construir Tabla HTML", "type": "main", "index": 0 }]]
-    },
-    "Construir Tabla HTML": {
+    "Evaluar Alertas": {
       "main": [[{ "node": "Enviar Alerta Gmail", "type": "main", "index": 0 }]]
     }
   },
@@ -138,5 +124,5 @@
   "meta": {
     "instanceId": "1683493ca79f362f0cdd6311bf11f1609621e8cd207e078485d8ca15ccb3975a"
   },
-  "tags": ["inventario", "odoo", "alertas"]
+  "tags": ["inventario", "odoo", "seguridad", "anti-robo"]
 }
