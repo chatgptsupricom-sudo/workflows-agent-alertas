@@ -61,11 +61,11 @@
           "conditions": [
             {
               "id": "cond-001",
-              "leftValue": "={{ ($json.result || []).length }}",
-              "rightValue": 0,
+              "leftValue": "={{ $json.result }}",
+              "rightValue": "",
               "operator": {
-                "type": "number",
-                "operation": "larger"
+                "type": "array",
+                "operation": "notEmpty"
               }
             }
           ],
